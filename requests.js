@@ -4,7 +4,7 @@ const Room = require('./Room');
 
 const rooms = [];
 
-router.post('/create-room', (req, res, next) => {
+router.post('/create-room', allowCors((req, res, next) => {
   const id = Math.ceil(Math.random() * 1000000);
   if (findRoom(id)) {
     res.status(500).send('Room already exists');
@@ -17,9 +17,9 @@ router.post('/create-room', (req, res, next) => {
   res.json({ 
     roomId: id
   });
-});
+}));
 
-router.get('/room/:roomId', (req, res, next) => {
+router.get('/room/:roomId', allowCors((req, res, next) => {
   const roomId = req.params.roomId;
   const room = rooms.find(room => {
     return room.id == +roomId;
@@ -33,7 +33,7 @@ router.get('/room/:roomId', (req, res, next) => {
   res.json({
     room: room,
   });
-});
+}));
 
 
 // socket.io requests
@@ -43,16 +43,16 @@ const findRoom = (id) => {
   });
 }
 
-const sendToUsers = (socket, room, event, data) => {
+const sendToUsers = allowCors((socket, room, event, data) => {
   console.log('sendToUsers', event, data);
   room.users.forEach(user => {
     if (user.id != socket.id) {
       socket.to(user.id).emit(event, data);
     }
   });
-}
+});
 
-const onConnection = (socket) => {
+const onConnection = allowCors((socket) => {
   const roomId = socket.handshake.query.roomId;
   const userName = socket.handshake.query.userName;
   const avatar = socket.handshake.query.avatar;
@@ -88,9 +88,9 @@ const onConnection = (socket) => {
     console.log('Room not found');
     socket.emit('room-not-found');
   }
-}
+});
 
-const playVideoEvent = (socket) => {
+const playVideoEvent = allowCors((socket) => {
   socket.on('emit-play', (id) => {
     console.log(`Room ${id} - User ${socket.id} : PLAY video`);
     const room = findRoom(id);
@@ -98,9 +98,9 @@ const playVideoEvent = (socket) => {
       sendToUsers(socket, room, 'set-play', {});
     }
   });
-}
+});
 
-const pauseVideoEvent = (socket) => {
+const pauseVideoEvent = allowCors((socket) => {
   socket.on('emit-pause', (id) => {
     console.log(`Room ${id} - User ${socket.id} : PAUSE video`);
     const room = findRoom(id);
@@ -108,9 +108,9 @@ const pauseVideoEvent = (socket) => {
       sendToUsers(socket, room, 'set-pause', {});
     }
   });
-}
+});
 
-const disconnectEvent = (socket) => {
+const disconnectEvent = allowCors((socket) => {
   socket.on('disconnect', () => {
     console.log(`User ${socket.id} disconnected`);
     // remove user from room
@@ -125,9 +125,9 @@ const disconnectEvent = (socket) => {
       }
     }
   });
-}
+});
 
-const setProgressEvent = (socket) => {
+const setProgressEvent = allowCors((socket) => {
   socket.on('emit-progress', (data) => {
     console.log(`Room ${data.roomId} User ${socket.id} : SET progress to ${data.played}`);
     const room = findRoom(data.roomId);
@@ -139,9 +139,9 @@ const setProgressEvent = (socket) => {
       });
     }
   });
-}
+});
 
-const setPlaybackRateEvent = (socket) => {
+const setPlaybackRateEvent = allowCors((socket) => {
   socket.on('emit-playback-rate', (data) => {
     console.log(`Room ${data.roomId} User ${socket.id} : SET playback rate to ${data.playbackRate}`);
     const room = findRoom(data.roomId);
@@ -153,9 +153,22 @@ const setPlaybackRateEvent = (socket) => {
       });
     }
   });
+});
+
+const allowCors = fn => async (req, res) => {
+  res.setHeader('Access-Control-Allow-Credentials', true)
+  res.setHeader('Access-Control-Allow-Origin', '*')
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT')
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+  )
+  if (req.method === 'OPTIONS') {
+    res.status(200).end()
+    return
+  }
+  return await fn(req, res)
 }
-
-
 
 module.exports = router;
 
